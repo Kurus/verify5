@@ -5,9 +5,6 @@ from scipy import signal as sg
 import os
 import scipy.io
 
-dim = 7
-dim_p=dim + 2
-dep = 3
 ker_list = [64,64, 64, 128, 128, 192, 192, 256, 256]
 sq_ker_list = [16,16, 32, 32, 48, 48, 64, 64, 1000]
 pool_en_list = [1,0, 0, 0, 0, 0, 0, 0, 0]
@@ -17,12 +14,6 @@ sq_rep_list = [0,0,0,0, 0, 0, 0, 0, 0] # repete squze kernl for last layer
 random = 0 #TODO
 num_layer = 1
 
-
-final_out = []
-cwd = os.getcwd()
-path = cwd + "/bin"
-os.makedirs(path, exist_ok=True)
-os.chdir(path)
 
 ###########quantization weight###########
 from ctypes import *
@@ -48,6 +39,7 @@ from ctypes import *
 
 def dq(x):
     bits = cast(pointer(c_double(x)), POINTER(c_int64)).contents.value
+    bits = bits + 0x0000200000000000;
     e = ((bits&0x7FF0000000000000)>>52) - 1008
     man = bits&0x000FC00000000000
     if e==0 and man==0:
@@ -57,7 +49,6 @@ def dq(x):
     if e>31:
         bits = bits & 0x800fffffffffffff
         bits = bits | ((31+1008)<<52)
-    # bits = bits + 0x010000;
     # bits=(bits>>17)<<17
     bits=bits&0xFFFFC00000000000
     return cast(pointer(c_int64(bits)), POINTER(c_double)).contents.value
@@ -131,94 +122,101 @@ b2dv = np.vectorize(b2d)
 
 def add(x):
     np.set_printoptions(linewidth=np.inf)
-    assert(x.size%128 == 0)
-    prt = np.split(x,x.size//128)
+    sz = x.size
+    assert(sz%128 == 0)
     ans = []
-    for i in prt:
-        ii = i
+    for a in range(0,sz//128):
+        i = a*64
+        ii = np.append(x[i:i+64],x[sz//2+i:sz//2+i+64])
         assert(ii.size==128)
-        # print(ii)
         for n in range(0,3):#64-64 to 8-8 (1x1-3x3)
             t=[]
             for a in range(0,len(ii),2):
                 t.append(dq(ii[a])+dq(ii[a+1]))
             ii = np.array(t)
         assert(ii.size==16)
-        # print(ii)
         t=[]
         for a in range(0,8):
             t.append(dq(ii[a])+dq(ii[a+8]))
         ii=np.array(t)
         assert(ii.size==8)
-        # print(ii)
         for n in range(0,3):
             t=[]
             for a in range(0,len(ii),2):
                 t.append(dq(ii[a])+dq(ii[a+1]))
             ii = np.array(t)
         assert(ii.size==1)
-        # print(ii)
         ans.append(ii[0])
     res = 0
     for a in ans:
         res = dq(res)+dq(a)
     return dq(res)
 
+#################################################### input image
+weights_raw = scipy.io.loadmat("sqz_full.mat")
+
+final_out = []
+cwd = os.getcwd()
+path = cwd + "/bin"
+os.makedirs(path, exist_ok=True)
+os.chdir(path)
+
+def preprocess(image, mean_pixel):
+    swap_img = np.array(image)
+    img_out = np.array(swap_img)
+    # img_out[:, :, 0] = swap_img[:, :, 2]
+    # img_out[:, :, 2] = swap_img[:, :, 0]
+    return img_out# - mean_pixel ###############check tis
+
+path='../parrot.jpeg'
+img_orig = scipy.misc.imread(path)
+img = scipy.misc.imresize(img_orig, (227, 227)).astype(np.float)
+if len(img.shape) == 2:
+    # grayscale
+    img = np.dstack((img,img,img))
+mean_pixel = np.array([104.006, 116.669, 122.679])
+img=preprocess(img,mean_pixel)
+import matplotlib.pyplot as plt;
+img=np.array(b2dv(d2bv(img)), dtype='uint8')
+print(img);plt.imshow(img);plt.show();exit()
+img=d2bv(img)
+dim,dim,dep = img.shape
+dim_p=dim + 2
+
+in_ori_c = [] # for first layer in hardware it need to be mod 4
+dim_c = dim
+if dim%4 ==0:
+    dim_c = dim
+else:
+    dim_c = ((dim//4) + 1)*4
+in_ori_c = np.full(dim*dim_c*dep, 0, dtype='uint8').reshape((dim,dim_c,dep))
+in_ori_c[0:dim,0:dim,:] = img
+# f_in_c = open("input_layer_c.txt","w")
+f_in_c_b = open("input_layer_c.bin","wb")
+for d in range(0,dep):
+    for z in range(0,dim):
+        for y in range(0,dim_c):
+            lis = in_ori_c[z,y,d].flatten().tolist()
+            # f_in_c.write(str(lis)[1:-1]+'\n')
+            f_in_c_b.write(bytearray(lis))
+
+
 for cur_ly in range(0,num_layer):
-    ker = ker_list[cur_ly]
-    sq_ker = sq_ker_list[cur_ly]
-    pool_en = pool_en_list[cur_ly]
-    av_pool_en = av_pool_en_list[cur_ly]
-    stride2_en = stride2_en_list[cur_ly]
+    i = cur_ly + 1
     sq_rep = sq_rep_list[cur_ly]
+    stride2_en = stride2_en_list[cur_ly]
     if cur_ly == 0:
         #######################         Input image
-        if random == 0:
-            # in_ori = np.full(dim*dim*dep, 0, dtype='uint8').reshape((dim,dim,dep))
-            # in_ori[:,:,0] = np.arange(dim*dim, dtype = 'uint8').reshape(dim,dim)
-            # in_ori = np.arange(dim*dim*dep, dtype='uint8').reshape((dim,dim,dep))
-            in_ori = np.random.randint(low = 0, high = 255, size = (dim,dim,dep), dtype='uint8')
-        else:
-            in_ori = np.random.randint(low = 0, high = 255, size = (dim,dim,dep), dtype='uint8')
+        in_ori = img
     else:
         in_ori = d2bv(np.rollaxis(final_out,0,3))
-        dim,_,dep = in_ori.shape
+        dim,dim,dep = in_ori.shape
         dim_p=dim + 2
-
+    
     in_l = np.zeros(dim_p*dim_p*dep, dtype='uint8').reshape((dim_p,dim_p,dep))
     in_l[1:-1,1:-1,:] = in_ori
     print("input layer");print(in_l[:,:,0]);
-    # f_in = open("input_layer.txt","w")
-    # f_in_b = open("input_layer.bin","wb")
-    # for z in range(0,dim):
-    #     for y in range(0,dep):
-    #         for x in range(0,dim):
-    #             lis = in_l[z:z+3,x:x+3,y].flatten().tolist()
-    #             for rep in range(0,ker,4):
-    #                 f_in.write(str(lis)[1:-1]+'\n')
-    #                 f_in_b.write(bytearray(lis))
 
-    in_ori_c = [] # for first layer in hardware it need to be mod 4
-    dim_c = dim
-    if cur_ly == 0:
-        if dim%4 ==0:
-            dim_c = dim
-        else:
-            dim_c = ((dim//4) + 1)*4
-        in_ori_c = np.full(dim_c*dim_c*dep, 0, dtype='uint8').reshape((dim_c,dim_c,dep))
-        print(in_ori_c.shape)
-        print(in_ori.shape)
-        in_ori_c[0:dim,0:dim,:] = in_ori
-    else: 
-        in_ori_c = in_ori
-    # f_in_c = open("input_layer_c.txt","w")
-    f_in_c_b = open("input_layer_c"+"_"+str(cur_ly)+".bin","wb")
-    for d in range(0,dep):
-        for z in range(0,dim_c):
-            for y in range(0,dim_c):
-                lis = in_ori_c[z,y,d].flatten().tolist()
-                # f_in_c.write(str(lis)[1:-1]+'\n')
-                f_in_c_b.write(bytearray(lis))
     if stride2_en==1: # valid padding
         in_l=in_ori
     in_l = b2dv(in_l)

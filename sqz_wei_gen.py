@@ -29,6 +29,7 @@ dqv = np.vectorize(dq)
 def d2b(x):
     x = cast(pointer(c_double(x)), POINTER(c_int64)).contents.value
     # print(hex(x))
+    x = x+0x0000200000000000
     e = ((x&0x7FF0000000000000)>>52) - 1008
     man = x&0x000C000000000000
     sgn = x&0x8000000000000000
@@ -56,33 +57,30 @@ b2dv = np.vectorize(b2d)
 
 def add(x):
     np.set_printoptions(linewidth=np.inf)
-    assert(x.size%128 == 0)
-    prt = np.split(x,x.size//128)
+    sz = x.size
+    assert(sz%128 == 0)
     ans = []
-    for i in prt:
-        ii = i
+    for a in range(0,sz//128):
+        i = a*64
+        ii = np.append(x[i:i+64],x[sz//2+i:sz//2+i+64])
         assert(ii.size==128)
-        # print(ii)
         for n in range(0,3):#64-64 to 8-8 (1x1-3x3)
             t=[]
             for a in range(0,len(ii),2):
                 t.append(dq(ii[a])+dq(ii[a+1]))
             ii = np.array(t)
         assert(ii.size==16)
-        # print(ii)
         t=[]
         for a in range(0,8):
             t.append(dq(ii[a])+dq(ii[a+8]))
         ii=np.array(t)
         assert(ii.size==8)
-        # print(ii)
         for n in range(0,3):
             t=[]
             for a in range(0,len(ii),2):
                 t.append(dq(ii[a])+dq(ii[a+1]))
             ii = np.array(t)
         assert(ii.size==1)
-        # print(ii)
         ans.append(ii[0])
     res = 0
     for a in ans:
@@ -102,7 +100,7 @@ def preprocess(image, mean_pixel):
     img_out = np.array(swap_img)
     # img_out[:, :, 0] = swap_img[:, :, 2]
     # img_out[:, :, 2] = swap_img[:, :, 0]
-    return img_out# - mean_pixel
+    return img_out - mean_pixel
 
 # import sys
 # path = sys.argv[1]
