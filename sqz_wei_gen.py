@@ -136,7 +136,7 @@ for d in range(0,dep):
             lis = in_ori_c[z,y,d].flatten().tolist()
             # f_in_c.write(str(lis)[1:-1]+'\n')
             f_in_c_b.write(bytearray(lis))
-
+f_in_c_b.close()
 # if cur_ly == 0:
 #     #######################         Input image
 #     if random == 0:
@@ -225,7 +225,7 @@ for i in range(1,10):
             lis = ker_l_1[x+4:x+8,z][::-1]
             f_k_1_b.write(bytearray(lis))
         # f_k_1.write(str(lis)[1:-1]+'\n')
-
+    f_k_1_b.close()
     ker_l_3 = exp3k
     # ker_l_3 = np.random.randint(low = 0, high = 255, size = (ker,dep,9),dtype='uint8').reshape((ker,dep,9))
     # f_k_3 = open("ker_3x3.txt","w")
@@ -242,7 +242,7 @@ for i in range(1,10):
             nin = lis[x:x+8,6].flatten() #no reversed 6 means 
             f_k_3_b.write(bytearray(nin))
             # f_k_3.write(str(nin)[1:-1]+'\n')
-
+    f_k_3_b.close()
     ########################        exapnd bias
     bis_1 = exp1b
     # bis_1 = np.full(ker,0x00,dtype='uint8') #one
@@ -257,7 +257,7 @@ for i in range(1,10):
         # b_bis.write(str(lis_b3)[1:-1]+'\n')
         b_bis_b.write(bytearray(lis_b1))
         b_bis_b.write(bytearray(lis_b3))
-
+    b_bis_b.close()
     ########################   squ kernel
     sq_ker,dep = sqk.shape
     # sq_ker_l = np.full(sq_ker*dep,0, dtype='uint8').reshape((sq_ker,dep))
@@ -279,11 +279,11 @@ for i in range(1,10):
                 lis = sq_ker_l[x,z:z+8][::-1] #reverse added
                 # sq_k_1.write(str(lis)[1:-1]+'\n')
                 sq_k_1_b.write(bytearray(lis))
-        
+    sq_k_1_b.close()
     sq_ker_l = b2dv(sq_ker_l) #########converting to float
     print("sqeeze kernel");print(sq_ker_l[0,:])
     # #######################    squ bias
-    sq_bis_1 = np.full(sq_ker,0x00,dtype='uint8')
+    sq_bis_1 = sqb
     # sq_bis_1 = np.random.randint(low = 0, high = 255, size = (sq_ker),dtype='uint8')
     # print(sq_bis_1)
     # f_sq_bis = open("sq_bias.txt","w")
@@ -293,5 +293,5 @@ for i in range(1,10):
         # lis = lis[::-1] #reverse
         # f_sq_bis.write(str(lis)[1:-1]+'\n')
         f_sq_bis_b.write(bytearray(lis))
-
+    f_sq_bis_b.close()
 os.chdir(cwd)
