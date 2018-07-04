@@ -41,10 +41,6 @@ b2dv = np.vectorize(b2d)
 #################################################### input image
 weights_raw = scipy.io.loadmat("sqz_full.mat")
 
-cwd = os.getcwd()
-path = cwd + "/bin"
-os.makedirs(path, exist_ok=True)
-os.chdir(path)
 
 def preprocess(image, mean_pixel):
     swap_img = np.array(image)
@@ -53,17 +49,23 @@ def preprocess(image, mean_pixel):
     # img_out[:, :, 2] = swap_img[:, :, 0]
     return img_out - mean_pixel
 
-# import sys
-# path = sys.argv[1]
+import sys
+path = sys.argv[1]
 # print(path)
 # path='../parrot.jpeg'
 # path='../orangutan.jpg'
-path='../peacock.jpeg'
+# path='../peacock.jpeg'
 img_orig = scipy.misc.imread(path)
 img = scipy.misc.imresize(img_orig, (227, 227)).astype(np.float)
 mean_pixel = np.array([104.006, 116.669, 122.679])
 img=preprocess(img,mean_pixel)
 img=d2bv(img)
+
+
+cwd = os.getcwd()
+path = cwd + "/bin"
+os.makedirs(path, exist_ok=True)
+os.chdir(path)
 
 
 dim,dim,dep = img.shape
@@ -86,3 +88,5 @@ for d in range(0,dep):
             # f_in_c.write(str(lis)[1:-1]+'\n')
             f_in_c_b.write(bytearray(lis))
 f_in_c_b.close()
+
+os.chdir(cwd)

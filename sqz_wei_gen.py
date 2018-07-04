@@ -56,8 +56,9 @@ def preprocess(image, mean_pixel):
 # import sys
 # path = sys.argv[1]
 # print(path)
-path='../parrot.jpeg'
+# path='../parrot.jpeg'
 # path='../orangutan.jpg'
+path='../peacock.jpeg'
 img_orig = scipy.misc.imread(path)
 img = scipy.misc.imresize(img_orig, (227, 227)).astype(np.float)
 mean_pixel = np.array([104.006, 116.669, 122.679])
