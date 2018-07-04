@@ -56,6 +56,10 @@ path = sys.argv[1]
 # path='../orangutan.jpg'
 # path='../peacock.jpeg'
 img_orig = scipy.misc.imread(path)
+
+import matplotlib.pyplot as plt;
+plt.imshow(img_orig);plt.show();
+
 img = scipy.misc.imresize(img_orig, (227, 227)).astype(np.float)
 mean_pixel = np.array([104.006, 116.669, 122.679])
 img=preprocess(img,mean_pixel)
@@ -89,4 +93,5 @@ for d in range(0,dep):
             f_in_c_b.write(bytearray(lis))
 f_in_c_b.close()
 
+print("Sucessfully generated input image data!!!!!!")
 os.chdir(cwd)
