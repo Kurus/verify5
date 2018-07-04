@@ -9,23 +9,6 @@ sq_rep_list = [0,0,0,0,0,0,0,0,0] # repete squze kernl for last layer
 ###########quantization weight###########
 from ctypes import *
 
-def dq(x):
-    bits = cast(pointer(c_double(x)), POINTER(c_int64)).contents.value
-    e = ((bits&0x7FF0000000000000)>>52) - 1008
-    man = bits&0x000FC00000000000
-    if e==0 and man==0:
-        bits = 0
-    if e<0:
-        bits=0
-    if e>31:
-        bits = bits & 0x800fffffffffffff
-        bits = bits | ((31+1008)<<52)
-    # bits = bits + 0x010000;
-    # bits=(bits>>17)<<17
-    bits=bits&0xFFFFC00000000000
-    return cast(pointer(c_int64(bits)), POINTER(c_double)).contents.value
-dqv = np.vectorize(dq)
-
 def d2b(x):
     x = cast(pointer(c_double(x)), POINTER(c_int64)).contents.value
     # print(hex(x))
@@ -55,38 +38,6 @@ def b2d(x):
     return cast(pointer(c_int64(bits)), POINTER(c_double)).contents.value
 b2dv = np.vectorize(b2d) 
 
-def add(x):
-    np.set_printoptions(linewidth=np.inf)
-    sz = x.size
-    assert(sz%128 == 0)
-    ans = []
-    for a in range(0,sz//128):
-        i = a*64
-        ii = np.append(x[i:i+64],x[sz//2+i:sz//2+i+64])
-        assert(ii.size==128)
-        for n in range(0,3):#64-64 to 8-8 (1x1-3x3)
-            t=[]
-            for a in range(0,len(ii),2):
-                t.append(dq(ii[a])+dq(ii[a+1]))
-            ii = np.array(t)
-        assert(ii.size==16)
-        t=[]
-        for a in range(0,8):
-            t.append(dq(ii[a])+dq(ii[a+8]))
-        ii=np.array(t)
-        assert(ii.size==8)
-        for n in range(0,3):
-            t=[]
-            for a in range(0,len(ii),2):
-                t.append(dq(ii[a])+dq(ii[a+1]))
-            ii = np.array(t)
-        assert(ii.size==1)
-        ans.append(ii[0])
-    res = 0
-    for a in ans:
-        res = dq(res)+dq(a)
-    return dq(res)
-
 #################################################### input image
 weights_raw = scipy.io.loadmat("sqz_full.mat")
 
@@ -109,9 +60,6 @@ path='../parrot.jpeg'
 # path='../orangutan.jpg'
 img_orig = scipy.misc.imread(path)
 img = scipy.misc.imresize(img_orig, (227, 227)).astype(np.float)
-if len(img.shape) == 2:
-    # grayscale
-    img = np.dstack((img,img,img))
 mean_pixel = np.array([104.006, 116.669, 122.679])
 img=preprocess(img,mean_pixel)
 img=d2bv(img)
@@ -182,6 +130,7 @@ for i in range(1,10):
         exp3k[:,:,2,:] = tmp0
         exp3k[:,:,0,:] = tmp1
         sqk, sqb = weights_raw[sq][0]
+        sqk = np.concatenate((np.zeros(sqk.shape), sqk), axis=2)
         # conv1 exp 1 is zeros
         ektmp = (1,1)+exp3k.shape[2:]
         exp1k=np.zeros(ektmp)
@@ -208,7 +157,6 @@ for i in range(1,10):
     exp3b=d2bv(exp3b)
     sqk  =d2bv(sqk)
     sqb  =d2bv(sqb)
-
     ################ exp kernels
     ker,dep = exp1k.shape
     ker_l_1 = exp1k
@@ -259,6 +207,7 @@ for i in range(1,10):
         b_bis_b.write(bytearray(lis_b3))
     b_bis_b.close()
     ########################   squ kernel
+    sqk = np.moveaxis(sqk,0,-1)
     sq_ker,dep = sqk.shape
     # sq_ker_l = np.full(sq_ker*dep,0, dtype='uint8').reshape((sq_ker,dep))
     sq_ker_l = sqk
